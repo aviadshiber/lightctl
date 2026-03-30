@@ -74,13 +74,15 @@ printed for manual cleanup (exit code 8).`,
 		for {
 			select {
 			case <-sigCh:
+				signal.Stop(sigCh)
 				appCtx.io.Warning("Interrupted, cleaning up...")
 				cleanup()
 				os.Exit(130)
 			case <-ticker.C:
 				if time.Since(start) > timeoutDuration {
-					appCtx.io.Error(fmt.Sprintf("Timeout after %ds. Action %s left for manual cleanup (`lightctl gc` or `lightctl snapshot delete %s %s`)",
-						timeout, action.ID, agentID, action.ID))
+					appCtx.io.Error(fmt.Sprintf("Timeout after %ds, cleaning up action %s...",
+						timeout, action.ID))
+					cleanup()
 					os.Exit(8)
 				}
 

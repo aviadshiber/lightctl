@@ -1,7 +1,9 @@
 package client
 
 import (
+	"bytes"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -184,6 +186,10 @@ func TestDebugRedaction(t *testing.T) {
 	t.Setenv("LIGHTCTL_DEBUG", "1")
 	defer os.Unsetenv("LIGHTCTL_DEBUG")
 
+	var logBuf bytes.Buffer
+	log.SetOutput(&logBuf)
+	defer log.SetOutput(os.Stderr)
+
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(PagedResponse[Agent]{Data: nil, TotalCount: 0, PageCount: 0})
 	}))
@@ -200,6 +206,14 @@ func TestDebugRedaction(t *testing.T) {
 	_, err := c.ListAgents(10, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+
+	logOutput := logBuf.String()
+	if strings.Contains(logOutput, "supersecrettoken") {
+		t.Fatal("API key leaked in debug log output")
+	}
+	if !strings.Contains(logOutput, "LR****") {
+		t.Fatal("expected redacted key marker in debug output")
 	}
 }
 

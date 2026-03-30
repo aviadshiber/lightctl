@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -58,6 +59,9 @@ func New(server, apiKey string, opts ...Option) (*Client, error) {
 			DialContext: (&net.Dialer{
 				Timeout: 3 * time.Second,
 			}).DialContext,
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
 		},
 	}
 
@@ -78,12 +82,16 @@ func (c *Client) ListAgents(limit, page int) (*PagedResponse[Agent], error) {
 
 // ListActions returns actions for an agent (optionally filtered by type).
 func (c *Client) ListActions(agentID string, actionType string, limit, page int) (*PagedResponse[Action], error) {
-	url := fmt.Sprintf("%s/actions?agentId=%s&limit=%d&page=%d", c.baseURL, agentID, limit, page)
+	params := url.Values{}
+	params.Set("agentId", agentID)
+	params.Set("limit", strconv.Itoa(limit))
+	params.Set("page", strconv.Itoa(page))
 	if actionType != "" {
-		url += "&type=" + actionType
+		params.Set("type", actionType)
 	}
+	reqURL := c.baseURL + "/actions?" + params.Encode()
 	var resp PagedResponse[Action]
-	if err := c.doJSON("GET", url, nil, &resp); err != nil {
+	if err := c.doJSON("GET", reqURL, nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
@@ -170,22 +178,22 @@ func (c *Client) doJSON(method, url string, body interface{}, result interface{}
 			continue
 		}
 
-		defer resp.Body.Close()
-
 		if resp.StatusCode >= 400 {
 			respBody, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
 			return fmt.Errorf("%s %s: HTTP %d: %s", method, url, resp.StatusCode, string(respBody))
 		}
 
 		if result != nil {
 			if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
+				resp.Body.Close()
 				return fmt.Errorf("decoding response: %w", err)
 			}
 		} else {
 			// Drain body to allow connection reuse
 			_, _ = io.Copy(io.Discard, resp.Body)
 		}
-
+		resp.Body.Close()
 		return nil
 	}
 

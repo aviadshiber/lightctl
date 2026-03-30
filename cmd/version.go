@@ -14,6 +14,6 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version information",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Fprintf(appCtx.io.Out, "lightctl %s (%s/%s)\n", Version, runtime.GOOS, runtime.GOARCH)
+		fmt.Fprintf(cmd.OutOrStdout(), "lightctl %s (%s/%s)\n", Version, runtime.GOOS, runtime.GOARCH)
 	},
 }
