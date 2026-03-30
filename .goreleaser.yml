@@ -1,0 +1,26 @@
+version: 2
+project_name: lightctl
+builds:
+  - main: ./cmd/lightctl
+    binary: lightctl
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files: [LICENSE, README.md]
+nfpms:
+  - package_name: lightctl
+    homepage: https://github.com/aviadshiber/lightctl
+    maintainer: Aviad Shiber
+    description: LightRun CLI -- runtime debugging tool
+    license: MIT
+    formats: [deb, rpm]
+brews:
+  - repository:
+      owner: aviadshiber
+      name: homebrew-tap
+    description: LightRun CLI -- runtime debugging tool
+    license: MIT
+checksum:
+  name_template: checksums.txt
