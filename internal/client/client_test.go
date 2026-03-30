@@ -35,7 +35,6 @@ func TestNew_AllowHTTPWithFlag(t *testing.T) {
 func TestListAgents(t *testing.T) {
 	t.Parallel()
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify auth header
 		auth := r.Header.Get("Authorization")
 		if auth != "Bearer testkey" {
 			t.Errorf("expected Bearer testkey, got %q", auth)
@@ -51,7 +50,7 @@ func TestListAgents(t *testing.T) {
 			TotalCount: 1,
 			PageCount:  1,
 		}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer ts.Close()
 
@@ -85,7 +84,7 @@ func TestCreateAction(t *testing.T) {
 		}
 
 		var req CreateActionRequest
-		json.NewDecoder(r.Body).Decode(&req)
+		_ = json.NewDecoder(r.Body).Decode(&req)
 		if req.AgentID != "agent1" || req.FileName != "Foo.java" || req.LineNumber != 42 {
 			t.Errorf("unexpected request: %+v", req)
 		}
@@ -98,7 +97,7 @@ func TestCreateAction(t *testing.T) {
 			LineNumber: 42,
 			Status:     "ACTIVE",
 		}
-		json.NewEncoder(w).Encode(action)
+		_ = json.NewEncoder(w).Encode(action)
 	}))
 	defer ts.Close()
 
@@ -134,7 +133,7 @@ func TestRetryOn429(t *testing.T) {
 			return
 		}
 		resp := PagedResponse[Agent]{Data: []Agent{{ID: "a1"}}, TotalCount: 1, PageCount: 1}
-		json.NewEncoder(w).Encode(resp)
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer ts.Close()
 
@@ -182,13 +181,11 @@ func TestRetryExhausted(t *testing.T) {
 }
 
 func TestDebugRedaction(t *testing.T) {
-	// This test verifies the debug log never reveals the real token.
-	// We just ensure the client can be created with debug on.
 	t.Setenv("LIGHTCTL_DEBUG", "1")
 	defer os.Unsetenv("LIGHTCTL_DEBUG")
 
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(PagedResponse[Agent]{Data: nil, TotalCount: 0, PageCount: 0})
+		_ = json.NewEncoder(w).Encode(PagedResponse[Agent]{Data: nil, TotalCount: 0, PageCount: 0})
 	}))
 	defer ts.Close()
 
@@ -200,7 +197,6 @@ func TestDebugRedaction(t *testing.T) {
 		debug:      true,
 	}
 
-	// This should succeed without panicking; debug logs go to stderr
 	_, err := c.ListAgents(10, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -236,7 +232,7 @@ func TestHTTPError(t *testing.T) {
 	t.Parallel()
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte(`{"error":"not found"}`))
+		_, _ = w.Write([]byte(`{"error":"not found"}`))
 	}))
 	defer ts.Close()
 

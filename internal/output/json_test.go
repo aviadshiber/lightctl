@@ -82,6 +82,6 @@ func TestFilterJQ_InvalidExpr(t *testing.T) {
 
 func formatResult(v interface{}) string {
 	var buf bytes.Buffer
-	PrintJSON(&buf, v)
+	_ = PrintJSON(&buf, v)
 	return strings.TrimSpace(buf.String())
 }

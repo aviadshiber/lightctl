@@ -182,8 +182,8 @@ func (c *Client) doJSON(method, url string, body interface{}, result interface{}
 				return fmt.Errorf("decoding response: %w", err)
 			}
 		} else {
-			// Drain body
-			io.Copy(io.Discard, resp.Body)
+			// Drain body to allow connection reuse
+			_, _ = io.Copy(io.Discard, resp.Body)
 		}
 
 		return nil
