@@ -159,6 +159,51 @@ func MaskAPIKey(key string) string {
 
 // ReadStateFile reads action IDs from the state file.
 func (c *Config) ReadStateFile() ([]string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.readStateFileLocked()
+}
+
+// WriteStateFile writes action IDs to the state file.
+// Note: the mutex guards within-process races only; cross-process races
+// (multiple concurrent lightctl watch invocations) require OS-level locking.
+func (c *Config) WriteStateFile(ids []string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.writeStateFileLocked(ids)
+}
+
+// AddActionToState appends an action ID to the state file atomically.
+func (c *Config) AddActionToState(id string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ids, err := c.readStateFileLocked()
+	if err != nil {
+		return err
+	}
+	ids = append(ids, id)
+	return c.writeStateFileLocked(ids)
+}
+
+// RemoveActionFromState removes an action ID from the state file atomically.
+func (c *Config) RemoveActionFromState(id string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	ids, err := c.readStateFileLocked()
+	if err != nil {
+		return err
+	}
+	filtered := make([]string, 0, len(ids))
+	for _, existing := range ids {
+		if existing != id {
+			filtered = append(filtered, existing)
+		}
+	}
+	return c.writeStateFileLocked(filtered)
+}
+
+// readStateFileLocked reads the state file. Caller must hold c.mu.
+func (c *Config) readStateFileLocked() ([]string, error) {
 	dir, err := c.ConfigDir()
 	if err != nil {
 		return nil, err
@@ -178,11 +223,8 @@ func (c *Config) ReadStateFile() ([]string, error) {
 	return ids, nil
 }
 
-// WriteStateFile writes action IDs to the state file.
-func (c *Config) WriteStateFile(ids []string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
+// writeStateFileLocked writes the state file. Caller must hold c.mu.
+func (c *Config) writeStateFileLocked(ids []string) error {
 	dir, err := c.ConfigDir()
 	if err != nil {
 		return err
@@ -199,31 +241,6 @@ func (c *Config) WriteStateFile(ids []string) error {
 		return fmt.Errorf("writing state file: %w", err)
 	}
 	return nil
-}
-
-// AddActionToState appends an action ID to the state file.
-func (c *Config) AddActionToState(id string) error {
-	ids, err := c.ReadStateFile()
-	if err != nil {
-		return err
-	}
-	ids = append(ids, id)
-	return c.WriteStateFile(ids)
-}
-
-// RemoveActionFromState removes an action ID from the state file.
-func (c *Config) RemoveActionFromState(id string) error {
-	ids, err := c.ReadStateFile()
-	if err != nil {
-		return err
-	}
-	filtered := make([]string, 0, len(ids))
-	for _, existing := range ids {
-		if existing != id {
-			filtered = append(filtered, existing)
-		}
-	}
-	return c.WriteStateFile(filtered)
 }
 
 // --- Audit log ---

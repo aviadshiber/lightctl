@@ -42,6 +42,9 @@ from the state file.`,
 		}
 
 		appCtx.io.Printf("GC complete: deleted %d, failed %d\n", deleted, failed)
+		if failed > 0 {
+			return fmt.Errorf("%d action(s) could not be deleted", failed)
+		}
 		return nil
 	},
 }
