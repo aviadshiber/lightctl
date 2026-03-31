@@ -30,7 +30,7 @@ var agentsListCmd = &cobra.Command{
 					return fmt.Errorf("listing agents: %w", err)
 				}
 				agents = append(agents, resp.Data...)
-				if len(agents) >= resp.TotalCount || len(resp.Data) == 0 {
+				if len(resp.Data) == 0 {
 					break
 				}
 				page++

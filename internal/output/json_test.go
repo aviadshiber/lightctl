@@ -72,6 +72,20 @@ func TestFilterJQ(t *testing.T) {
 	}
 }
 
+func TestFilterJQ_EmptyResult(t *testing.T) {
+	t.Parallel()
+	// select(. > 100) on a small array produces no output at all (empty iterator).
+	// We expect [] not nil so callers always get a JSON-serialisable value.
+	result, err := FilterJQ([]interface{}{1.0, 2.0}, ".[] | select(. > 100)")
+	if err != nil {
+		t.Fatalf("FilterJQ: %v", err)
+	}
+	got := strings.TrimSpace(formatResult(result))
+	if got != "[]" {
+		t.Errorf("expected [] for empty result, got %q", got)
+	}
+}
+
 func TestFilterJQ_InvalidExpr(t *testing.T) {
 	t.Parallel()
 	_, err := FilterJQ(map[string]interface{}{}, ".[invalid")
