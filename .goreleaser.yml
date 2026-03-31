@@ -20,6 +20,8 @@ brews:
   - repository:
       owner: aviadshiber
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      branch: "lightctl-{{.Version}}"
     description: LightRun CLI -- runtime debugging tool
     license: MIT
 checksum:
