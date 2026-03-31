@@ -5,6 +5,8 @@ builds:
     binary: lightctl
     goos: [linux, darwin]
     goarch: [amd64, arm64]
+    ldflags:
+      - -X github.com/aviadshiber/lightctl/cmd.Version={{.Version}}
 archives:
   - format: tar.gz
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
