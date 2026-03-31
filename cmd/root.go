@@ -36,6 +36,7 @@ func init() {
 	// Persistent flags
 	rootCmd.PersistentFlags().String("api-key", "", "API key (overrides keychain/config)")
 	rootCmd.PersistentFlags().String("server", "", "LightRun server URL")
+	rootCmd.PersistentFlags().String("agent-pool-id", "", "LightRun agent pool ID (auto-discovered if not set)")
 	rootCmd.PersistentFlags().Bool("insecure-http", false, "Allow plain HTTP (no TLS)")
 	rootCmd.PersistentFlags().Bool("insecure-plaintext-config", false, "Store API key in plaintext config instead of keychain")
 	rootCmd.PersistentFlags().BoolP("quiet", "q", false, "Suppress informational output")
@@ -79,11 +80,23 @@ func init() {
 		if err != nil {
 			return err
 		}
+
+		// Resolve agent pool ID: flag > env > config > auto-discover
+		agentPoolID := resolveString(cmd, "agent-pool-id", "LIGHTCTL_AGENT_POOL_ID", cfg.AgentPoolID, "")
+		if agentPoolID != "" {
+			c.SetAgentPoolID(agentPoolID)
+		} else if !isAgentPoolFreeCmd(cmd) {
+			if err := c.AutoDiscoverPool(); err != nil {
+				return fmt.Errorf("agent pool ID required: set via --agent-pool-id, LIGHTCTL_AGENT_POOL_ID, or `lightctl config set agent_pool_id <id>` (%w)", err)
+			}
+		}
+
 		appCtx.client = c
 		return nil
 	}
 
 	// Register sub-commands
+	rootCmd.AddCommand(agentPoolsCmd)
 	rootCmd.AddCommand(agentsCmd)
 	rootCmd.AddCommand(snapshotCmd)
 	rootCmd.AddCommand(watchCmd)
@@ -104,6 +117,17 @@ func Execute() {
 func isConfigOrVersionCmd(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
 		if c == configCmd || c == versionCmd {
+			return true
+		}
+	}
+	return false
+}
+
+// isAgentPoolFreeCmd returns true for commands that work without an agent pool
+// (e.g. agent-pools list, which is how users discover their pool ID).
+func isAgentPoolFreeCmd(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c == agentPoolsCmd {
 			return true
 		}
 	}

@@ -29,7 +29,8 @@ func TestNew_AllowHTTPWithFlag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if c.baseURL != "http://example.com/api/v1" {
+	want := "http://example.com/api/v1"
+	if c.baseURL != want {
 		t.Fatalf("unexpected baseURL: %s", c.baseURL)
 	}
 }
@@ -46,32 +47,31 @@ func TestListAgents(t *testing.T) {
 		}
 
 		resp := PagedResponse[Agent]{
-			Data: []Agent{
-				{ID: "a1", DisplayName: "agent-1", Host: "host1", Status: "ACTIVE", Tags: []Tag{{Name: "prod"}}},
-			},
-			TotalCount: 1,
-			PageCount:  1,
+			Items:   []Agent{{ID: "a1", Name: "agent-1", Type: "Java", Version: "1.0", VersionStatus: "Active"}},
+			Total:   1,
+			HasMore: false,
 		}
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer ts.Close()
 
 	c := &Client{
-		httpClient: ts.Client(),
-		baseURL:    ts.URL + "/api/v1",
-		apiKey:     "testkey",
-		maxRetries: 0,
+		httpClient:  ts.Client(),
+		baseURL:     ts.URL + "/api/v1",
+		apiKey:      "testkey",
+		agentPoolID: "pool-1",
+		maxRetries:  0,
 	}
 
 	resp, err := c.ListAgents(50, 0)
 	if err != nil {
 		t.Fatalf("ListAgents: %v", err)
 	}
-	if len(resp.Data) != 1 {
-		t.Fatalf("expected 1 agent, got %d", len(resp.Data))
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(resp.Items))
 	}
-	if resp.Data[0].ID != "a1" {
-		t.Fatalf("expected ID a1, got %s", resp.Data[0].ID)
+	if resp.Items[0].ID != "a1" {
+		t.Fatalf("expected ID a1, got %s", resp.Items[0].ID)
 	}
 }
 
@@ -87,34 +87,34 @@ func TestCreateAction(t *testing.T) {
 
 		var req CreateActionRequest
 		_ = json.NewDecoder(r.Body).Decode(&req)
-		if req.AgentID != "agent1" || req.FileName != "Foo.java" || req.LineNumber != 42 {
+		if req.AgentID != "agent1" || req.Location != "Foo.java" || req.Line != 42 {
 			t.Errorf("unexpected request: %+v", req)
 		}
 
 		action := Action{
 			ID:         "snap-1",
-			Type:       "SNAPSHOT",
-			AgentID:    "agent1",
-			FileName:   "Foo.java",
-			LineNumber: 42,
-			Status:     "ACTIVE",
+			ActionType: "SNAPSHOT",
+			Location:   "Foo.java",
+			Line:       42,
+			Status:     "ACCEPTED",
 		}
 		_ = json.NewEncoder(w).Encode(action)
 	}))
 	defer ts.Close()
 
 	c := &Client{
-		httpClient: ts.Client(),
-		baseURL:    ts.URL + "/api/v1",
-		apiKey:     "testkey",
-		maxRetries: 0,
+		httpClient:  ts.Client(),
+		baseURL:     ts.URL + "/api/v1",
+		apiKey:      "testkey",
+		agentPoolID: "pool-1",
+		maxRetries:  0,
 	}
 
 	action, err := c.CreateAction(CreateActionRequest{
 		AgentID:    "agent1",
-		Type:       "SNAPSHOT",
-		FileName:   "Foo.java",
-		LineNumber: 42,
+		ActionType: "SNAPSHOT",
+		Location:   "Foo.java",
+		Line:       42,
 	})
 	if err != nil {
 		t.Fatalf("CreateAction: %v", err)
@@ -134,24 +134,25 @@ func TestRetryOn429(t *testing.T) {
 			w.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
-		resp := PagedResponse[Agent]{Data: []Agent{{ID: "a1"}}, TotalCount: 1, PageCount: 1}
+		resp := PagedResponse[Agent]{Items: []Agent{{ID: "a1"}}, Total: 1}
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer ts.Close()
 
 	c := &Client{
-		httpClient: ts.Client(),
-		baseURL:    ts.URL + "/api/v1",
-		apiKey:     "testkey",
-		maxRetries: 5,
+		httpClient:  ts.Client(),
+		baseURL:     ts.URL + "/api/v1",
+		apiKey:      "testkey",
+		agentPoolID: "pool-1",
+		maxRetries:  5,
 	}
 
 	resp, err := c.ListAgents(50, 0)
 	if err != nil {
 		t.Fatalf("expected success after retries, got: %v", err)
 	}
-	if len(resp.Data) != 1 {
-		t.Fatalf("expected 1 agent, got %d", len(resp.Data))
+	if len(resp.Items) != 1 {
+		t.Fatalf("expected 1 agent, got %d", len(resp.Items))
 	}
 	if got := atomic.LoadInt32(&attempts); got != 3 {
 		t.Fatalf("expected 3 attempts, got %d", got)
@@ -167,10 +168,11 @@ func TestRetryExhausted(t *testing.T) {
 	defer ts.Close()
 
 	c := &Client{
-		httpClient: ts.Client(),
-		baseURL:    ts.URL + "/api/v1",
-		apiKey:     "testkey",
-		maxRetries: 2,
+		httpClient:  ts.Client(),
+		baseURL:     ts.URL + "/api/v1",
+		apiKey:      "testkey",
+		agentPoolID: "pool-1",
+		maxRetries:  2,
 	}
 
 	_, err := c.ListAgents(50, 0)
@@ -191,16 +193,17 @@ func TestDebugRedaction(t *testing.T) {
 	defer log.SetOutput(os.Stderr)
 
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(PagedResponse[Agent]{Data: nil, TotalCount: 0, PageCount: 0})
+		_ = json.NewEncoder(w).Encode(PagedResponse[Agent]{Items: nil, Total: 0})
 	}))
 	defer ts.Close()
 
 	c := &Client{
-		httpClient: ts.Client(),
-		baseURL:    ts.URL + "/api/v1",
-		apiKey:     "supersecrettoken",
-		maxRetries: 0,
-		debug:      true,
+		httpClient:  ts.Client(),
+		baseURL:     ts.URL + "/api/v1",
+		apiKey:      "supersecrettoken",
+		agentPoolID: "pool-1",
+		maxRetries:  0,
+		debug:       true,
 	}
 
 	_, err := c.ListAgents(10, 0)
@@ -251,13 +254,14 @@ func TestHTTPError(t *testing.T) {
 	defer ts.Close()
 
 	c := &Client{
-		httpClient: ts.Client(),
-		baseURL:    ts.URL + "/api/v1",
-		apiKey:     "testkey",
-		maxRetries: 0,
+		httpClient:  ts.Client(),
+		baseURL:     ts.URL + "/api/v1",
+		apiKey:      "testkey",
+		agentPoolID: "pool-1",
+		maxRetries:  0,
 	}
 
-	_, err := c.GetAction("missing")
+	_, err := c.ListAgents(10, 0)
 	if err == nil {
 		t.Fatal("expected error for 404")
 	}

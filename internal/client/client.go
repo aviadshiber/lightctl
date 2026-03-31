@@ -22,6 +22,7 @@ type Client struct {
 	httpClient   *http.Client
 	baseURL      string
 	apiKey       string
+	agentPoolID  string
 	debug        bool
 	maxRetries   int
 	insecureHTTP bool
@@ -68,24 +69,65 @@ func New(server, apiKey string, opts ...Option) (*Client, error) {
 	return c, nil
 }
 
+// SetAgentPoolID overrides the agent pool used for all requests.
+func (c *Client) SetAgentPoolID(id string) {
+	c.agentPoolID = id
+}
+
+// AgentPoolID returns the currently configured agent pool ID.
+func (c *Client) AgentPoolID() string {
+	return c.agentPoolID
+}
+
+// AutoDiscoverPool fetches the list of agent pools and sets the first one.
+// Returns an error if no pools are found.
+func (c *Client) AutoDiscoverPool() error {
+	resp, err := c.GetAgentPools(20, 0)
+	if err != nil {
+		return fmt.Errorf("auto-discovering agent pool: %w", err)
+	}
+	if len(resp.Items) == 0 {
+		return fmt.Errorf("no agent pools found; set agent_pool_id in config")
+	}
+	c.agentPoolID = resp.Items[0].ID
+	return nil
+}
+
 // --- public helpers ---
 
-// ListAgents returns a page of agents.
-func (c *Client) ListAgents(limit, page int) (*PagedResponse[Agent], error) {
-	url := fmt.Sprintf("%s/agents?limit=%d&page=%d", c.baseURL, limit, page)
-	var resp PagedResponse[Agent]
-	if err := c.doJSON("GET", url, nil, &resp); err != nil {
+// GetAgentPools returns a page of agent pools.
+func (c *Client) GetAgentPools(limit, offset int) (*PagedResponse[AgentPool], error) {
+	reqURL := fmt.Sprintf("%s/agent-pools?limit=%d&offset=%d", c.baseURL, limit, offset)
+	var resp PagedResponse[AgentPool]
+	if err := c.doJSON("GET", reqURL, nil, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-// ListActions returns actions for an agent (optionally filtered by type).
-func (c *Client) ListActions(agentID string, actionType string, limit, page int) (*PagedResponse[Action], error) {
+// ListAgents returns a page of agents.
+func (c *Client) ListAgents(limit, offset int) (*PagedResponse[Agent], error) {
 	params := url.Values{}
-	params.Set("agentId", agentID)
+	params.Set("agentPoolId", c.agentPoolID)
 	params.Set("limit", strconv.Itoa(limit))
-	params.Set("page", strconv.Itoa(page))
+	params.Set("offset", strconv.Itoa(offset))
+	reqURL := c.baseURL + "/agents?" + params.Encode()
+	var resp PagedResponse[Agent]
+	if err := c.doJSON("GET", reqURL, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// ListActions returns actions for an agent pool (optionally filtered by type and agentId).
+func (c *Client) ListActions(agentID string, actionType string, limit, offset int) (*PagedResponse[Action], error) {
+	params := url.Values{}
+	params.Set("agentPoolId", c.agentPoolID)
+	params.Set("limit", strconv.Itoa(limit))
+	params.Set("offset", strconv.Itoa(offset))
+	if agentID != "" {
+		params.Set("agentId", agentID)
+	}
 	if actionType != "" {
 		params.Set("type", actionType)
 	}
@@ -99,28 +141,41 @@ func (c *Client) ListActions(agentID string, actionType string, limit, page int)
 
 // CreateAction creates a new action and returns it.
 func (c *Client) CreateAction(req CreateActionRequest) (*Action, error) {
-	url := c.baseURL + "/actions"
+	params := url.Values{}
+	params.Set("agentPoolId", c.agentPoolID)
+	reqURL := c.baseURL + "/actions?" + params.Encode()
 	var action Action
-	if err := c.doJSON("POST", url, req, &action); err != nil {
+	if err := c.doJSON("POST", reqURL, req, &action); err != nil {
 		return nil, err
 	}
 	return &action, nil
 }
 
-// GetAction returns a single action.
+// GetAction finds an action by ID by listing and filtering.
+// The LightRun REST API does not support GET /actions/{id} directly.
 func (c *Client) GetAction(actionID string) (*Action, error) {
-	url := fmt.Sprintf("%s/actions/%s", c.baseURL, actionID)
-	var action Action
-	if err := c.doJSON("GET", url, nil, &action); err != nil {
-		return nil, err
+	offset := 0
+	for {
+		resp, err := c.ListActions("", "", 100, offset)
+		if err != nil {
+			return nil, fmt.Errorf("searching for action %s: %w", actionID, err)
+		}
+		for _, a := range resp.Items {
+			if a.ID == actionID {
+				return &a, nil
+			}
+		}
+		if !resp.HasMore {
+			return nil, fmt.Errorf("action %s not found", actionID)
+		}
+		offset += len(resp.Items)
 	}
-	return &action, nil
 }
 
 // DeleteAction deletes an action by ID.
 func (c *Client) DeleteAction(actionID string) error {
-	url := fmt.Sprintf("%s/actions/%s", c.baseURL, actionID)
-	return c.doJSON("DELETE", url, nil, nil)
+	reqURL := fmt.Sprintf("%s/actions/%s", c.baseURL, actionID)
+	return c.doJSON("DELETE", reqURL, nil, nil)
 }
 
 // --- internal ---
