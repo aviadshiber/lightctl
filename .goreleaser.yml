@@ -22,7 +22,23 @@ brews:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
       branch: "lightctl-{{.Version}}"
-    description: LightRun CLI -- runtime debugging tool
-    license: MIT
+      pull_request:
+        enabled: true
+        base:
+          owner: aviadshiber
+          name: homebrew-tap
+          branch: main
+    commit_author:
+      name: goreleaser
+      email: goreleaser@users.noreply.github.com
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Version }}"
+    directory: Formula
+    homepage: "https://github.com/aviadshiber/lightctl"
+    description: "LightRun CLI -- runtime debugging tool"
+    license: "MIT"
+    install: |
+      bin.install "lightctl"
+    test: |
+      system "#{bin}/lightctl", "version"
 checksum:
   name_template: checksums.txt
