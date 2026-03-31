@@ -56,6 +56,9 @@ func FilterJQ(data interface{}, expr string) (interface{}, error) {
 		results = append(results, v)
 	}
 
+	if len(results) == 0 {
+		return []interface{}{}, nil
+	}
 	if len(results) == 1 {
 		return results[0], nil
 	}

@@ -78,7 +78,7 @@ var snapshotListCmd = &cobra.Command{
 					return fmt.Errorf("listing snapshots: %w", err)
 				}
 				actions = append(actions, resp.Data...)
-				if len(actions) >= resp.TotalCount || len(resp.Data) == 0 {
+				if len(resp.Data) == 0 {
 					break
 				}
 				page++
@@ -106,11 +106,11 @@ var snapshotListCmd = &cobra.Command{
 }
 
 var snapshotGetCmd = &cobra.Command{
-	Use:   "get <agent-id> <snapshot-id>",
+	Use:   "get <snapshot-id>",
 	Short: "Get snapshot details",
-	Args:  cobra.ExactArgs(2),
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		action, err := appCtx.client.GetAction(args[1])
+		action, err := appCtx.client.GetAction(args[0])
 		if err != nil {
 			return fmt.Errorf("getting snapshot: %w", err)
 		}
