@@ -78,6 +78,11 @@ func (c *Client) SetAgentPoolID(id string) {
 	c.agentPoolID = id
 }
 
+// SetCompanyID sets the company ID used for create-action requests.
+func (c *Client) SetCompanyID(id string) {
+	c.companyID = id
+}
+
 // AgentPoolID returns the currently configured agent pool ID.
 func (c *Client) AgentPoolID() string {
 	return c.agentPoolID
@@ -188,21 +193,12 @@ func (c *Client) CreateAction(req CreateActionRequest) (*Action, error) {
 	return &Action{ID: resp.ID}, nil
 }
 
-// getCompanyID returns the company ID, discovering it lazily from /api/account.
+// getCompanyID returns the company ID or an actionable error if not configured.
 func (c *Client) getCompanyID() (string, error) {
 	if c.companyID != "" {
 		return c.companyID, nil
 	}
-	reqURL := strings.TrimSuffix(c.baseURL, "/api/v1") + "/api/account"
-	var account accountResponse
-	if err := c.doJSON("GET", reqURL, nil, &account); err != nil {
-		return "", err
-	}
-	if account.Company.ID == "" {
-		return "", fmt.Errorf("company ID not found in /api/account response")
-	}
-	c.companyID = account.Company.ID
-	return c.companyID, nil
+	return "", fmt.Errorf("company ID required: set via --company-id, LIGHTCTL_COMPANY_ID, or `lightctl config set company_id <id>`")
 }
 
 // GetAction finds an action by ID by listing and filtering.

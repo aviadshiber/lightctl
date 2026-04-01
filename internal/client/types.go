@@ -93,9 +93,3 @@ type insertCaptureResponse struct {
 	ID         string `json:"id"`
 }
 
-// accountResponse is a partial /api/account response used to discover the company ID.
-type accountResponse struct {
-	Company struct {
-		ID string `json:"id"`
-	} `json:"company"`
-}

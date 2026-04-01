@@ -79,11 +79,6 @@ func TestCreateAction(t *testing.T) {
 	t.Parallel()
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
-		case r.Method == "GET" && r.URL.Path == "/api/account":
-			_ = json.NewEncoder(w).Encode(accountResponse{Company: struct {
-				ID string `json:"id"`
-			}{ID: "company-1"}})
-
 		case r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/athena/company/company-1/1.78/insertCapture/"):
 			if r.Header.Get("Content-Type") != "application/json" {
 				t.Errorf("missing content-type")
@@ -108,6 +103,7 @@ func TestCreateAction(t *testing.T) {
 		athenaURL:   ts.URL + "/athena",
 		apiKey:      "testkey",
 		agentPoolID: "pool-1",
+		companyID:   "company-1",
 		maxRetries:  0,
 	}
 
