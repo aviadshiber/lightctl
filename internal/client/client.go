@@ -21,8 +21,10 @@ import (
 type Client struct {
 	httpClient   *http.Client
 	baseURL      string
+	athenaURL    string // https://<host>/athena
 	apiKey       string
 	agentPoolID  string
+	companyID    string // discovered lazily via /api/account
 	debug        bool
 	maxRetries   int
 	insecureHTTP bool
@@ -51,7 +53,9 @@ func New(server, apiKey string, opts ...Option) (*Client, error) {
 		return nil, fmt.Errorf("server URL must use https:// (got %q); use --insecure-http to allow plain HTTP", server)
 	}
 
-	c.baseURL = strings.TrimRight(server, "/") + "/api/v1"
+	serverBase := strings.TrimRight(server, "/")
+	c.baseURL = serverBase + "/api/v1"
+	c.athenaURL = serverBase + "/athena"
 
 	c.httpClient = &http.Client{
 		Timeout: 10 * time.Second,
@@ -139,16 +143,66 @@ func (c *Client) ListActions(agentID string, actionType string, limit, offset in
 	return &resp, nil
 }
 
-// CreateAction creates a new action and returns it.
+// CreateAction creates a new snapshot action via the insertCapture endpoint.
 func (c *Client) CreateAction(req CreateActionRequest) (*Action, error) {
-	params := url.Values{}
-	params.Set("agentPoolId", c.agentPoolID)
-	reqURL := c.baseURL + "/actions?" + params.Encode()
-	var action Action
-	if err := c.doJSON("POST", reqURL, req, &action); err != nil {
+	companyID, err := c.getCompanyID()
+	if err != nil {
+		return nil, fmt.Errorf("getting company ID: %w", err)
+	}
+
+	maxHits := req.MaxHitCount
+	if maxHits == 0 {
+		maxHits = 10
+	}
+	expireSecs := req.ExpireSecs
+	if expireSecs == 0 {
+		expireSecs = 3600
+	}
+
+	body := insertCaptureBody{
+		ActionType: req.ActionType,
+		Filename:   req.Location,
+		Line:       req.Line,
+		Column:     0,
+		Condition:  req.Condition,
+		AgentID:    req.AgentID,
+		AgentPoolID: c.agentPoolID,
+		CaptureActionExtensionDTO: captureActionExtensionDTO{
+			WatchExpressions:   []interface{}{},
+			ContextExpressions: map[string]interface{}{},
+			Expressions:        []interface{}{},
+		},
+		ExpirationSeconds:        expireSecs,
+		Disabled:                 false,
+		IgnoreQuota:              false,
+		MaxHitCount:              maxHits,
+		BreakpointMaxHitCount:    maxHits,
+		IsMaxHitCountDistributed: false,
+	}
+
+	reqURL := fmt.Sprintf("%s/company/%s/1.78/insertCapture/%s", c.athenaURL, companyID, req.AgentID)
+	var resp insertCaptureResponse
+	if err := c.doJSON("POST", reqURL, body, &resp); err != nil {
 		return nil, err
 	}
-	return &action, nil
+	return &Action{ID: resp.ID}, nil
+}
+
+// getCompanyID returns the company ID, discovering it lazily from /api/account.
+func (c *Client) getCompanyID() (string, error) {
+	if c.companyID != "" {
+		return c.companyID, nil
+	}
+	reqURL := strings.TrimSuffix(c.baseURL, "/api/v1") + "/api/account"
+	var account accountResponse
+	if err := c.doJSON("GET", reqURL, nil, &account); err != nil {
+		return "", err
+	}
+	if account.Company.ID == "" {
+		return "", fmt.Errorf("company ID not found in /api/account response")
+	}
+	c.companyID = account.Company.ID
+	return c.companyID, nil
 }
 
 // GetAction finds an action by ID by listing and filtering.

@@ -31,7 +31,7 @@ var snapshotAddCmd = &cobra.Command{
 
 		action, err := appCtx.client.CreateAction(client.CreateActionRequest{
 			AgentID:     agentID,
-			ActionType:  "SNAPSHOT",
+			ActionType:  "CAPTURE",
 			Location:    fileName,
 			Line:        lineNum,
 			Condition:   condition,
@@ -72,7 +72,7 @@ var snapshotListCmd = &cobra.Command{
 		if all {
 			offset := 0
 			for {
-				resp, err := appCtx.client.ListActions(agentID, "SNAPSHOT", 100, offset)
+				resp, err := appCtx.client.ListActions(agentID, "CAPTURE", 100, offset)
 				if err != nil {
 					return fmt.Errorf("listing snapshots: %w", err)
 				}
@@ -83,7 +83,7 @@ var snapshotListCmd = &cobra.Command{
 				offset += len(resp.Items)
 			}
 		} else {
-			resp, err := appCtx.client.ListActions(agentID, "SNAPSHOT", limit, 0)
+			resp, err := appCtx.client.ListActions(agentID, "CAPTURE", limit, 0)
 			if err != nil {
 				return fmt.Errorf("listing snapshots: %w", err)
 			}

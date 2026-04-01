@@ -33,7 +33,7 @@ printed for manual cleanup (exit code 8).`,
 		// 1. Create snapshot
 		action, err := appCtx.client.CreateAction(client.CreateActionRequest{
 			AgentID:    agentID,
-			ActionType: "SNAPSHOT",
+			ActionType: "CAPTURE",
 			Location:   fileName,
 			Line:       lineNum,
 		})

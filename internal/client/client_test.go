@@ -78,33 +78,34 @@ func TestListAgents(t *testing.T) {
 func TestCreateAction(t *testing.T) {
 	t.Parallel()
 	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			t.Errorf("expected POST, got %s", r.Method)
-		}
-		if r.Header.Get("Content-Type") != "application/json" {
-			t.Errorf("missing content-type")
-		}
+		switch {
+		case r.Method == "GET" && r.URL.Path == "/api/account":
+			_ = json.NewEncoder(w).Encode(accountResponse{Company: struct {
+				ID string `json:"id"`
+			}{ID: "company-1"}})
 
-		var req CreateActionRequest
-		_ = json.NewDecoder(r.Body).Decode(&req)
-		if req.AgentID != "agent1" || req.Location != "Foo.java" || req.Line != 42 {
-			t.Errorf("unexpected request: %+v", req)
-		}
+		case r.Method == "POST" && strings.HasPrefix(r.URL.Path, "/athena/company/company-1/1.78/insertCapture/"):
+			if r.Header.Get("Content-Type") != "application/json" {
+				t.Errorf("missing content-type")
+			}
+			var body insertCaptureBody
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if body.AgentID != "agent1" || body.Filename != "Foo.java" || body.Line != 42 {
+				t.Errorf("unexpected body: agentId=%s filename=%s line=%d", body.AgentID, body.Filename, body.Line)
+			}
+			_ = json.NewEncoder(w).Encode(insertCaptureResponse{Status: "OK", StatusCode: "STATUS_OK", ID: "snap-1"})
 
-		action := Action{
-			ID:         "snap-1",
-			ActionType: "SNAPSHOT",
-			Location:   "Foo.java",
-			Line:       42,
-			Status:     "ACCEPTED",
+		default:
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
 		}
-		_ = json.NewEncoder(w).Encode(action)
 	}))
 	defer ts.Close()
 
 	c := &Client{
 		httpClient:  ts.Client(),
 		baseURL:     ts.URL + "/api/v1",
+		athenaURL:   ts.URL + "/athena",
 		apiKey:      "testkey",
 		agentPoolID: "pool-1",
 		maxRetries:  0,
@@ -112,7 +113,7 @@ func TestCreateAction(t *testing.T) {
 
 	action, err := c.CreateAction(CreateActionRequest{
 		AgentID:    "agent1",
-		ActionType: "SNAPSHOT",
+		ActionType: "CAPTURE",
 		Location:   "Foo.java",
 		Line:       42,
 	})
