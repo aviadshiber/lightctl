@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/aviadshiber/lightctl/internal/client"
 	"github.com/spf13/cobra"
@@ -23,36 +22,32 @@ var agentsListCmd = &cobra.Command{
 		var agents []client.Agent
 
 		if all {
-			page := 0
+			offset := 0
 			for {
-				resp, err := appCtx.client.ListAgents(100, page)
+				resp, err := appCtx.client.ListAgents(100, offset)
 				if err != nil {
 					return fmt.Errorf("listing agents: %w", err)
 				}
-				agents = append(agents, resp.Data...)
-				if len(resp.Data) == 0 {
+				agents = append(agents, resp.Items...)
+				if !resp.HasMore {
 					break
 				}
-				page++
+				offset += len(resp.Items)
 			}
 		} else {
 			resp, err := appCtx.client.ListAgents(limit, 0)
 			if err != nil {
 				return fmt.Errorf("listing agents: %w", err)
 			}
-			agents = resp.Data
+			agents = resp.Items
 		}
 
 		return printResult(appCtx, agents,
-			[]string{"ID", "NAME", "HOST", "STATUS", "TAGS"},
+			[]string{"ID", "NAME", "TYPE", "VERSION", "STATUS"},
 			func() [][]string {
 				rows := make([][]string, len(agents))
 				for i, a := range agents {
-					tags := make([]string, len(a.Tags))
-					for j, t := range a.Tags {
-						tags[j] = t.Name
-					}
-					rows[i] = []string{a.ID, a.DisplayName, a.Host, a.Status, strings.Join(tags, ",")}
+					rows[i] = []string{a.ID, a.Name, a.Type, a.Version, a.VersionStatus}
 				}
 				return rows
 			},

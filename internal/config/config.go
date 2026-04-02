@@ -36,8 +36,10 @@ type Keyring interface {
 
 // Config holds application configuration.
 type Config struct {
-	Server string `yaml:"server,omitempty"`
-	APIKey string `yaml:"api_key,omitempty"` // only used in plaintext mode
+	Server      string `yaml:"server,omitempty"`
+	AgentPoolID string `yaml:"agent_pool_id,omitempty"`
+	CompanyID   string `yaml:"company_id,omitempty"`
+	APIKey      string `yaml:"api_key,omitempty"` // only used in plaintext mode
 
 	keyring              Keyring
 	insecurePlaintextCfg bool
@@ -266,9 +268,9 @@ func AppendAuditLog(cfgDir, op, agentID, actionID, fileLine string) error {
 // ValidateKey checks that a config key name is supported.
 func ValidateKey(key string) error {
 	switch strings.ToLower(key) {
-	case "api_key", "server":
+	case "api_key", "server", "agent_pool_id", "company_id":
 		return nil
 	default:
-		return fmt.Errorf("unknown config key %q (valid keys: api_key, server)", key)
+		return fmt.Errorf("unknown config key %q (valid keys: api_key, server, agent_pool_id, company_id)", key)
 	}
 }

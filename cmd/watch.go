@@ -33,9 +33,9 @@ printed for manual cleanup (exit code 8).`,
 		// 1. Create snapshot
 		action, err := appCtx.client.CreateAction(client.CreateActionRequest{
 			AgentID:    agentID,
-			Type:       "SNAPSHOT",
-			FileName:   fileName,
-			LineNumber: lineNum,
+			ActionType: "CAPTURE",
+			Location:   fileName,
+			Line:       lineNum,
 		})
 		if err != nil {
 			return fmt.Errorf("creating watch snapshot: %w", err)
@@ -92,8 +92,8 @@ printed for manual cleanup (exit code 8).`,
 					continue
 				}
 
-				// Check if snapshot fired (status changed from ACTIVE)
-				if a.Status != "ACTIVE" {
+				// Check if snapshot fired (status changed from ACCEPTED)
+				if a.Status != "ACCEPTED" {
 					// Look for the expression in the snapshot data.
 					// The snapshot data is returned as part of the action when fired.
 					appCtx.io.Success(fmt.Sprintf("Snapshot fired (status: %s)", a.Status))

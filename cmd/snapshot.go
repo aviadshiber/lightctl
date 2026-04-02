@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/aviadshiber/lightctl/internal/client"
 	"github.com/aviadshiber/lightctl/internal/config"
@@ -32,9 +31,9 @@ var snapshotAddCmd = &cobra.Command{
 
 		action, err := appCtx.client.CreateAction(client.CreateActionRequest{
 			AgentID:     agentID,
-			Type:        "SNAPSHOT",
-			FileName:    fileName,
-			LineNumber:  lineNum,
+			ActionType:  "CAPTURE",
+			Location:    fileName,
+			Line:        lineNum,
 			Condition:   condition,
 			ExpireSecs:  expire,
 			MaxHitCount: maxHits,
@@ -71,33 +70,32 @@ var snapshotListCmd = &cobra.Command{
 		var actions []client.Action
 
 		if all {
-			page := 0
+			offset := 0
 			for {
-				resp, err := appCtx.client.ListActions(agentID, "SNAPSHOT", 100, page)
+				resp, err := appCtx.client.ListActions(agentID, "CAPTURE", 100, offset)
 				if err != nil {
 					return fmt.Errorf("listing snapshots: %w", err)
 				}
-				actions = append(actions, resp.Data...)
-				if len(resp.Data) == 0 {
+				actions = append(actions, resp.Items...)
+				if !resp.HasMore {
 					break
 				}
-				page++
+				offset += len(resp.Items)
 			}
 		} else {
-			resp, err := appCtx.client.ListActions(agentID, "SNAPSHOT", limit, 0)
+			resp, err := appCtx.client.ListActions(agentID, "CAPTURE", limit, 0)
 			if err != nil {
 				return fmt.Errorf("listing snapshots: %w", err)
 			}
-			actions = resp.Data
+			actions = resp.Items
 		}
 
 		return printResult(appCtx, actions,
-			[]string{"ID", "TYPE", "FILE", "LINE", "STATUS", "CREATED"},
+			[]string{"ID", "TYPE", "LOCATION", "LINE", "STATUS", "CREATED"},
 			func() [][]string {
 				rows := make([][]string, len(actions))
 				for i, a := range actions {
-					created := time.UnixMilli(a.CreateTime).Format(time.RFC3339)
-					rows[i] = []string{a.ID, a.Type, a.FileName, strconv.Itoa(a.LineNumber), a.Status, created}
+					rows[i] = []string{a.ID, a.ActionType, a.Location, strconv.Itoa(a.Line), a.Status, a.CreatedAt}
 				}
 				return rows
 			},
@@ -105,26 +103,12 @@ var snapshotListCmd = &cobra.Command{
 	},
 }
 
-var snapshotGetCmd = &cobra.Command{
-	Use:   "get <snapshot-id>",
-	Short: "Get snapshot details",
+var snapshotDeleteCmd = &cobra.Command{
+	Use:   "delete <snapshot-id>",
+	Short: "Delete a snapshot",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		action, err := appCtx.client.GetAction(args[0])
-		if err != nil {
-			return fmt.Errorf("getting snapshot: %w", err)
-		}
-		return printResult(appCtx, action, nil, nil)
-	},
-}
-
-var snapshotDeleteCmd = &cobra.Command{
-	Use:   "delete <agent-id> <snapshot-id>",
-	Short: "Delete a snapshot",
-	Args:  cobra.ExactArgs(2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		agentID := args[0]
-		actionID := args[1]
+		actionID := args[0]
 
 		if err := appCtx.client.DeleteAction(actionID); err != nil {
 			return fmt.Errorf("deleting snapshot: %w", err)
@@ -135,7 +119,7 @@ var snapshotDeleteCmd = &cobra.Command{
 		}
 
 		cfgDir, _ := appCtx.cfg.ConfigDir()
-		if err := config.AppendAuditLog(cfgDir, "snapshot.delete", agentID, actionID, ""); err != nil {
+		if err := config.AppendAuditLog(cfgDir, "snapshot.delete", "", actionID, ""); err != nil {
 			appCtx.io.Warning(fmt.Sprintf("failed to write audit log: %v", err))
 		}
 
@@ -151,6 +135,5 @@ func init() {
 
 	snapshotCmd.AddCommand(snapshotAddCmd)
 	snapshotCmd.AddCommand(snapshotListCmd)
-	snapshotCmd.AddCommand(snapshotGetCmd)
 	snapshotCmd.AddCommand(snapshotDeleteCmd)
 }
