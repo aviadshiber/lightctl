@@ -44,6 +44,12 @@ var configSetCmd = &cobra.Command{
 				return fmt.Errorf("saving config: %w", err)
 			}
 			appCtx.io.Success(fmt.Sprintf("Agent pool ID set to %s", value))
+		case "company_id":
+			appCtx.cfg.CompanyID = value
+			if err := appCtx.cfg.Save(); err != nil {
+				return fmt.Errorf("saving config: %w", err)
+			}
+			appCtx.io.Success(fmt.Sprintf("Company ID set to %s", value))
 		}
 		return nil
 	},
@@ -70,6 +76,8 @@ var configGetCmd = &cobra.Command{
 			fmt.Fprintln(appCtx.io.Out, appCtx.cfg.Server)
 		case "agent_pool_id":
 			fmt.Fprintln(appCtx.io.Out, appCtx.cfg.AgentPoolID)
+		case "company_id":
+			fmt.Fprintln(appCtx.io.Out, appCtx.cfg.CompanyID)
 		}
 		return nil
 	},
@@ -86,6 +94,7 @@ var configListCmd = &cobra.Command{
 			{"api_key", masked},
 			{"server", appCtx.cfg.Server},
 			{"agent_pool_id", appCtx.cfg.AgentPoolID},
+			{"company_id", appCtx.cfg.CompanyID},
 		}
 		return output.PrintTable(appCtx.io.Out, []string{"KEY", "VALUE"}, rows)
 	},
